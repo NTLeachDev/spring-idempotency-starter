@@ -65,7 +65,9 @@ Subsequent requests using the same idempotency key return the previously stored 
 
 ## Response Requirements
 
-All methods annotated with `@Idempotent` must return:
+Methods annotated with `@Idempotent` must return `ResponseEntity<T>`. 
+
+This constraint allows the library to reliably capture and replay complete HTTP responses while keeping the implementation simple and storage-agnostic
 
 ```java
 ResponseEntity<T>
