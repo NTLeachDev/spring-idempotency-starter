@@ -71,7 +71,7 @@ Subsequent requests using the same idempotency key return the previously stored 
 - Not use `@ResponseStatus`
 - Not write directly to `HttpServletResponse`
 
-This constraint allows the library to reliably capture and replay complete HTTP responses while keeping the implementation simple.
+These constraints allow the library to reliably capture and replay complete HTTP responses while keeping the implementation simple.
 
 Example:
 
@@ -99,8 +99,6 @@ The library uses the `IdempotencyStore` interface for storage abstraction:
 
 ```java
 public interface IdempotencyStore {
-    Optional<StoredResponse> get(String key);
-    boolean tryAcquire(String key, Duration ttl);
     Optional<StoredResponse> getIfCachedOrAcquireLock(String key, Duration ttl);
     void storeResponse(String key, StoredResponse response, Duration ttl);
     void releaseLock(String key);

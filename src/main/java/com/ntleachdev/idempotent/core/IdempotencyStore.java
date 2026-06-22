@@ -6,9 +6,6 @@ import java.time.Duration;
 import java.util.Optional;
 
 public interface IdempotencyStore {
-    Optional<StoredResponse> get(final String key);
-
-    boolean tryAcquire(final String key, final Duration ttl);
 
     /**
      * Atomically attempts to get a cached response or acquire a processing lock.
