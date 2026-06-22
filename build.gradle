@@ -1,5 +1,31 @@
 plugins {
     id 'java'
+    alias(libs.plugins.spring.dependency.management)
+}
+
+group = 'com.nleachdev'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform(libs.spring.boot.bom)
+
+    // Spring AOP for aspect-oriented programming (for @Idempotent aspects)
+    implementation(libs.spring.boot.starter.aop)
+
+    // Redis/Valkey support (for idempotency key caching)
+    implementation(libs.spring.boot.starter.data.redis)
+
+    // Web support (for servlet context in aspects)
+    implementation(libs.spring.boot.starter.web)
+
+    // Spring Context (core dependency processing)
+    implementation(libs.spring.context)
+
+    testImplementation(libs.spring.boot.starter.test)
 }
 
 java {
@@ -7,3 +33,8 @@ java {
         languageVersion = JavaLanguageVersion.of(25)
     }
 }
+
+test {
+    useJUnitPlatform()
+}
+

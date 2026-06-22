@@ -56,7 +56,7 @@ Clients must provide an idempotency key.
 
 ```http
 POST /payments
-Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000
+X-Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000
 ```
 
 The first request executes normally and stores the response.
@@ -68,10 +68,6 @@ Subsequent requests using the same idempotency key return the previously stored 
 Methods annotated with `@Idempotent` must return `ResponseEntity<T>`. 
 
 This constraint allows the library to reliably capture and replay complete HTTP responses while keeping the implementation simple and storage-agnostic
-
-```java
-ResponseEntity<T>
-```
 
 Example:
 
