@@ -17,14 +17,14 @@ The library uses Spring AOP to intercept annotated controller methods and replay
 ### Gradle
 
 ```groovy
-implementation("com.github.<your-github-username>:spring-idempotency-starter:<version>")
+implementation("com.github.ntleachdev:spring-idempotency-starter:<version>")
 ```
 
 ### Maven
 
 ```xml
 <dependency>
-    <groupId>com.github.<your-github-username></groupId>
+    <groupId>com.github.ntleachdev</groupId>
     <artifactId>spring-idempotency-starter</artifactId>
     <version>${version}</version>
 </dependency>
