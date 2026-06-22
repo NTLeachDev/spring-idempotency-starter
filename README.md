@@ -7,10 +7,11 @@ The library uses Spring AOP to intercept annotated controller methods and replay
 ## Features
 
 * `@Idempotent` annotation for endpoint-level idempotency
-* Storage-agnostic design
-* Pluggable backend via `IdempotencyStore`
-* Supports Redis, PostgreSQL, or custom implementations
-* Replays the original HTTP response for duplicate requests
+* Storage-agnostic design with pluggable backends (Redis, PostgreSQL, DynamoDB, etc.)
+* Concurrent request handling with distributed lock semantics
+* Replays original HTTP response for duplicate requests
+* Configurable idempotency key validation (UUID, alphanumeric, custom)
+* Automatic response serialization/deserialization
 
 ## Installation
 
@@ -65,9 +66,12 @@ Subsequent requests using the same idempotency key return the previously stored 
 
 ## Response Requirements
 
-Methods annotated with `@Idempotent` must return `ResponseEntity<T>`. 
+`@Idempotent` endpoints must:
+- Return `ResponseEntity<?>`
+- Not use `@ResponseStatus`
+- Not write directly to `HttpServletResponse`
 
-This constraint allows the library to reliably capture and replay complete HTTP responses while keeping the implementation simple and storage-agnostic
+This constraint allows the library to reliably capture and replay complete HTTP responses while keeping the implementation simple.
 
 Example:
 
@@ -91,27 +95,23 @@ public CreateOrderResponse createOrder() {
 
 ## Storage
 
-The library is storage-agnostic and relies on the `IdempotencyStore` interface.
+The library uses the `IdempotencyStore` interface for storage abstraction:
 
 ```java
 public interface IdempotencyStore {
-
     Optional<StoredResponse> get(String key);
-
     boolean tryAcquire(String key, Duration ttl);
-
-    void saveResponse(String key, StoredResponse response);
-
-    void release(String key);
+    Optional<StoredResponse> getIfCachedOrAcquireLock(String key, Duration ttl);
+    void storeResponse(String key, StoredResponse response, Duration ttl);
+    void releaseLock(String key);
 }
 ```
 
-Implementations may use:
-
+Implementations can use:
 * Redis / Valkey
 * PostgreSQL
 * DynamoDB
-* In-memory storage
+* In-memory storage (for testing/POC)
 * Any custom backend
 
 ## Stored Response
@@ -159,11 +159,11 @@ Replay stored response
 
 ## Roadmap
 
-* Redis starter module
-* PostgreSQL implementation
-* Spring Boot auto-configuration
-* HTTP-layer implementation using filters/interceptors
-* Metrics and observability support
+* Spring Boot auto-configuration module
+* Redis starter implementation
+* PostgreSQL starter implementation
+* Metrics (cache hit rate, lock contention)
+* Distributed tracing support
 
 ## License
 

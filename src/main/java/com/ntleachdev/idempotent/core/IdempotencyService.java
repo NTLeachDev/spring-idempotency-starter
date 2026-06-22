@@ -1,19 +1,25 @@
 package com.ntleachdev.idempotent.core;
 
+import com.ntleachdev.idempotent.annotation.StoredDuration;
+import com.ntleachdev.idempotent.exception.IdempotencySerializationException;
+import com.ntleachdev.idempotent.exception.IdempotentOperationInProgressException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.ResolvableType;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class IdempotencyService {
-
-    private static final Duration TTL_PROCESSING = Duration.ofMinutes(5);
-    private static final Duration TTL_COMPLETED = Duration.ofDays(1);
-    private static final int KEY_LENGTH = 32;
-    private static final String PROCESSING_STATE = "PROCESSING";
 
     private final IdempotencyStore idempotencyStore;
     private final ObjectMapper objectMapper;
@@ -25,20 +31,63 @@ public class IdempotencyService {
         this.idempotencyStore = idempotencyStore;
     }
 
-    public boolean tryProcessingRequest(final String idempotencyKey) {
-        throw new UnsupportedOperationException("IdempotencyService#tryProcessingRequest is not yet implemented");
+    public Optional<HttpEntity<?>> getIfCachedOrAcquireLock(final String idempotencyKey, final Duration ttl)
+        throws IdempotentOperationInProgressException {
+        var result = idempotencyStore.getIfCachedOrAcquireLock(idempotencyKey, ttl);
+
+        if (result.isPresent()) {
+            var response = result.get();
+            if (response.isProcessing()) {
+                throw new IdempotentOperationInProgressException(
+                    "Request with idempotency key is currently being processed. Please retry shortly."
+                );
+            }
+            return Optional.of(StoredResponse.toResponseEntity(response));
+        }
+
+        return Optional.empty();
     }
 
-    public Object getStoredResponse(final String idempotencyKey, final ResolvableType returnType) {
-        throw new UnsupportedOperationException("IdempotencyService#getStoredResponse is not yet implemented");
+    public void markAsComplete(final String idempotencyKey, final ResponseEntity<?> result, final StoredDuration duration) {
+        final StoredResponse response = buildStoredResponse(result);
+        idempotencyStore.storeResponse(idempotencyKey, response, duration.scale().toDuration(duration.value()));
+        releaseLock(idempotencyKey);
     }
 
-    public void markAsComplete(final String idempotencyKey, final Object result) {
-        throw new UnsupportedOperationException("IdempotencyService#markAsComplete is not yet implemented");
+    public void releaseLock(final String idempotencyKey) {
+        idempotencyStore.releaseLock(idempotencyKey);
     }
 
-    public void evictLock(final String idempotencyKey) {
-        throw new UnsupportedOperationException("IdempotencyService#evictLock is not yet implemented");
+    private StoredResponse buildStoredResponse(final ResponseEntity<?> response) {
+        if (response == null) {
+            return StoredResponse.empty();
+        }
+
+        final HttpHeaders headers = response.getHeaders();
+        final Map<String, List<String>> headerMap = headers != null
+                ? headers.headerSet().stream().collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> List.copyOf(e.getValue())
+                ))
+                : Map.of();
+
+        return new StoredResponse(
+                response.getStatusCode().value(),
+                headerMap,
+                serializeBody(response.getBody()),
+                Instant.now()
+        );
     }
 
+    private byte[] serializeBody(final Object body) {
+        if (body == null) {
+            return null;
+        }
+
+        try {
+            return objectMapper.writeValueAsBytes(body);
+        } catch (JacksonException e) {
+            throw new IdempotencySerializationException("Failed to serialize response body", e);
+        }
+    }
 }

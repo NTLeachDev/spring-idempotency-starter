@@ -2,6 +2,7 @@
 java = "25"
 spring-boot = "4.0.6"
 spring-dependency-management = "1.1.7"
+jackson = "3.1.2"
 junit = "5"
 
 [libraries]
@@ -13,6 +14,9 @@ spring-boot-starter-test = { group = "org.springframework.boot", name = "spring-
 
 # Spring Framework
 spring-context = { group = "org.springframework", name = "spring-context" }
+
+# Jackson
+jackson-core = { group = "tools.jackson.core", name = "jackson-core", version.ref = "jackson"}
 
 # JUnit
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher" }

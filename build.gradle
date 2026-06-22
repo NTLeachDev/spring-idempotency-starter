@@ -25,6 +25,8 @@ dependencies {
     // Spring Context (core dependency processing)
     implementation(libs.spring.context)
 
+    implementation(libs.jackson.core)
+
     testImplementation(libs.spring.boot.starter.test)
 }
 
