@@ -1,27 +1,29 @@
 package com.ntleachdev.idempotent.core;
 
-import com.ntleachdev.idempotent.exception.IdempotentOperationInProgressException;
-
 import java.time.Duration;
-import java.util.Optional;
 
 public interface IdempotencyStore {
 
     /**
      * Atomically attempts to get a cached response or acquire a processing lock.
      *
-     * Returns:
-     * - Optional with StoredResponse if a cached response exists and not processing
-     * - Optional.empty() if the lock was successfully acquired by this call
-     *
-     * Throws:
-     * - IdempotentOperationInProgressException if the lock is currently held by another request
+     * Returns a {@link GetResult} which indicates whether the caller has acquired the lock
+     * (Status.ACQUIRED) or should replay an existing response (Status.REPLAY). The replayed
+     * response may be in PROCESSING state to indicate an in-progress operation.
      */
-    Optional<StoredResponse> getIfCachedOrAcquireLock(final String key, final Duration ttl)
-        throws IdempotentOperationInProgressException;
+    GetResult getIfCachedOrAcquireLock(final String key, final Duration lockTtl, final Duration responseTtl);
 
-    void storeResponse(final String key, final StoredResponse response, final Duration ttl);
+    /**
+     * Atomically stores the final response for the key. Implementations should attempt to
+     * replace the processing sentinel with the provided stored response. Returns true if the
+     * replacement succeeded or response already present; false if replacement failed due to race.
+     */
+    boolean storeResponse(final String key, final StoredResponse response);
 
+    /**
+     * Best-effort removal of a processing sentinel. Implementations may no-op if a stored
+     * response already exists.
+     */
     void releaseLock(final String key);
 }
 

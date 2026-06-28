@@ -1,169 +1,81 @@
 # Spring Idempotency Starter
 
-A lightweight Spring Boot starter that provides endpoint idempotency through the `@Idempotent` annotation.
+Lightweight starter to add idempotency to HTTP endpoints via the `@Idempotent` annotation.
 
-The library uses Spring AOP to intercept annotated controller methods and replay previously stored responses when the same idempotency key is received.
+This project is a POC-quality library intended for Spring applications. It provides a storage-agnostic idempotency
+mechanism with lock semantics and response replay. It targets unary HTTP endpoints (controller methods returning
+ResponseEntity).
 
-## Features
+## Key features
+- Simple `@Idempotent` annotation for endpoints
+- Pluggable `IdempotencyStore` implementations (in-memory, Redis, SQL, etc.)
+- Processing sentinel (lock) with configurable TTL and stored-response TTL
+- Pluggable key validation for `KeyFormat.CUSTOM`
+- Reasonable defaults for POC use
 
-* `@Idempotent` annotation for endpoint-level idempotency
-* Storage-agnostic design with pluggable backends (Redis, PostgreSQL, DynamoDB, etc.)
-* Concurrent request handling with distributed lock semantics
-* Replays original HTTP response for duplicate requests
-* Configurable idempotency key validation (UUID, alphanumeric, custom)
-* Automatic response serialization/deserialization
+# Getting started
 
-## Installation
-
-### Gradle
+## Gradle
 
 ```groovy
 implementation("com.github.ntleachdev:spring-idempotency-starter:<version>")
 ```
 
-### Maven
-
-```xml
-<dependency>
-    <groupId>com.github.ntleachdev</groupId>
-    <artifactId>spring-idempotency-starter</artifactId>
-    <version>${version}</version>
-</dependency>
-```
-
 ## Usage
 
-Annotate a controller endpoint with `@Idempotent`.
+Annotate your controller method with `@Idempotent`. The client must send an idempotency key as a header
+(default header name: `X-Idempotency-Key`).
+
+Example controller:
 
 ```java
 @RestController
-@RequestMapping("/payments")
 public class PaymentController {
 
     @Idempotent
-    @PostMapping
+    @PostMapping("/payments")
     public ResponseEntity<PaymentResponse> createPayment() {
-
         PaymentResponse response = paymentService.createPayment();
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
 ```
 
-Clients must provide an idempotency key.
-
-```http
-POST /payments
-X-Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000
-```
-
-The first request executes normally and stores the response.
-
-Subsequent requests using the same idempotency key return the previously stored response without re-executing the controller.
-
-## Response Requirements
-
-`@Idempotent` endpoints must:
-- Return `ResponseEntity<?>`
-- Not use `@ResponseStatus`
-- Not write directly to `HttpServletResponse`
-
-These constraints allow the library to reliably capture and replay complete HTTP responses while keeping the implementation simple.
-
-Example:
+# Key validation
+- Built-in formats are available (ANY, UUID, ALPHANUMERIC, etc.).
+- For `KeyFormat.CUSTOM` you must provide a `KeyValidator` bean:
 
 ```java
-@Idempotent
-@PostMapping
-public ResponseEntity<CreateOrderResponse> createOrder() {
-    ...
+@Bean
+public KeyValidator myValidator() {
+    return key -> key != null && key.matches("[0-9a-fA-F\\-]{36}");
 }
 ```
 
-Unsupported:
+# Important constraints
+- `@Idempotent` endpoints should return `ResponseEntity<?>` so the library can capture the full response.
+- Streaming endpoints are unsupported; this library targets unary request/response flows.
 
-```java
-@Idempotent
-@PostMapping
-public CreateOrderResponse createOrder() {
-    ...
-}
-```
+##  Storage API
 
-## Storage
+Implement `IdempotencyStore` to plug a backend. The store uses atomic lock acquisition and replacement semantics.
 
-The library uses the `IdempotencyStore` interface for storage abstraction:
+### Core types (overview)
+- `StoredResponse` — transport-friendly stored value (status, headers/metadata, body bytes, expiry, state)
+- `GetResult` — returned from lookup: either `ACQUIRED` (caller should proceed) or `REPLAY` with a
+  `StoredResponse` (either PROCESSING or STORED).
 
-```java
-public interface IdempotencyStore {
-    Optional<StoredResponse> getIfCachedOrAcquireLock(String key, Duration ttl);
-    void storeResponse(String key, StoredResponse response, Duration ttl);
-    void releaseLock(String key);
-}
-```
+### Error mapping
+- Missing/invalid keys -> HTTP 400
+- Operation in progress -> HTTP 409 (Conflict)
 
-Implementations can use:
-* Redis / Valkey
-* PostgreSQL
-* DynamoDB
-* In-memory storage (for testing/POC)
-* Any custom backend
+### Examples and extensions
+- In-memory store is provided for POC/testing. For production use, implement a Redis or SQL-backed
+  `IdempotencyStore` using atomic SET NX / conditional update semantics.
 
-## Stored Response
+# Contributing
+- Please open issues or PRs. Tests and documentation improvements are welcome.
 
-Responses are stored in a transport-friendly format:
-
-```java
-public record StoredResponse(
-    int statusCode,
-    Map<String, List<String>> headers,
-    byte[] body,
-    Instant createdAt
-) {}
-```
-
-## How It Works
-
-```text
-Request
-  ↓
-@Idempotent Aspect
-  ↓
-Check existing response
-  ↓
-Acquire lock
-  ↓
-Execute controller
-  ↓
-Store response
-  ↓
-Return response
-```
-
-For duplicate requests:
-
-```text
-Request
-  ↓
-@Idempotent Aspect
-  ↓
-Existing response found
-  ↓
-Replay stored response
-```
-
-## Roadmap
-
-* Spring Boot auto-configuration module
-* Redis starter implementation
-* PostgreSQL starter implementation
-* Metrics (cache hit rate, lock contention)
-* Distributed tracing support
-
-## License
-
+License
 MIT
 

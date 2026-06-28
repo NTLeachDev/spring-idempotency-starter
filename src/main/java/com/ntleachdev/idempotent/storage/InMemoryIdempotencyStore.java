@@ -1,12 +1,11 @@
 package com.ntleachdev.idempotent.storage;
 
+import com.ntleachdev.idempotent.core.GetResult;
 import com.ntleachdev.idempotent.core.IdempotencyStore;
 import com.ntleachdev.idempotent.core.StoredResponse;
-import com.ntleachdev.idempotent.exception.IdempotentOperationInProgressException;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -17,53 +16,72 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class InMemoryIdempotencyStore implements IdempotencyStore {
 
-    private record CacheEntry(StoredResponse response, Instant expiresAt) {
-            private CacheEntry(StoredResponse response, Duration expiresAt) {
-                this(response, Instant.now().plus(expiresAt));
-            }
-
-            boolean isExpired() {
-                return Instant.now().isAfter(expiresAt);
-            }
+    private record CacheEntry(StoredResponse response) {
+        boolean isExpired() {
+            return response.isExpired(Instant.now());
         }
+    }
 
     private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     @Override
-    public synchronized Optional<StoredResponse> getIfCachedOrAcquireLock(final String key, final Duration ttl)
-        throws IdempotentOperationInProgressException {
+    public GetResult getIfCachedOrAcquireLock(final String key, final Duration lockTtl, final Duration responseTtl) {
+        final Instant now = Instant.now();
         var existing = cache.get(key);
         if (existing != null && existing.isExpired()) {
-            cache.remove(key);
+            cache.remove(key, existing);
             existing = null;
         }
 
         if (existing == null) {
-            var processingEntry = new CacheEntry(StoredResponse.processing(), ttl);
-            cache.put(key, processingEntry);
-            return Optional.empty();
+            final var processing = StoredResponse.processing(now.plus(lockTtl));
+            final var processingEntry = new CacheEntry(processing);
+            final var prev = cache.putIfAbsent(key, processingEntry);
+            if (prev == null) {
+                // we acquired the lock
+                return GetResult.acquired();
+            }
+            existing = prev;
         }
 
-        final var response = existing.response;
-
-        if (response.isProcessing()) {
-            throw new IdempotentOperationInProgressException(
-                "Request is currently being processed. Please retry shortly."
-            );
-        }
-
-        return Optional.of(response);
+        final var response = existing.response();
+        // if processing or stored, return replay with the current response
+        return GetResult.replay(response);
     }
 
     @Override
-    public void storeResponse(final String key, final StoredResponse response, final Duration ttl) {
-        final var entry = new CacheEntry(response, ttl);
-        cache.put(key, entry);
+    public boolean storeResponse(final String key, final StoredResponse response) {
+        // Try to replace the processing sentinel with the final stored response
+        final int maxAttempts = 3;
+        for (int i = 0; i < maxAttempts; i++) {
+            var existing = cache.get(key);
+            if (existing == null || existing.isExpired()) {
+                cache.put(key, new CacheEntry(response));
+                return true;
+            }
+
+            final var existingResp = existing.response();
+            if (existingResp.isProcessing()) {
+                // attempt to replace sentinel atomically
+                final boolean replaced = cache.replace(key, existing, new CacheEntry(response));
+                if (replaced) return true;
+                // else loop and retry
+            } else {
+                // already stored - nothing to do
+                return true;
+            }
+        }
+        // failed to replace after retries; check if current is stored
+        var current = cache.get(key);
+        return current != null && current.response().isStored();
     }
 
     @Override
     public void releaseLock(final String key) {
-        cache.remove(key);
+        var existing = cache.get(key);
+        if (existing != null && existing.response().isProcessing()) {
+            cache.remove(key, existing);
+        }
     }
 }
 

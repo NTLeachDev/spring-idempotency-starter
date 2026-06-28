@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'groovy'
     alias(libs.plugins.spring.dependency.management)
 }
 
@@ -13,21 +14,32 @@ repositories {
 dependencies {
     implementation platform(libs.spring.boot.bom)
 
-    // Spring AOP for aspect-oriented programming (for @Idempotent aspects)
-    implementation(libs.spring.boot.starter.aop)
+    implementation(
+            // Spring AOP for aspect-oriented programming (for @Idempotent aspects)
+            libs.spring.boot.starter.aop,
 
-    // Redis/Valkey support (for idempotency key caching)
-    implementation(libs.spring.boot.starter.data.redis)
+            // Redis/Valkey support (for idempotency key caching)
+            libs.spring.boot.starter.data.redis,
 
-    // Web support (for servlet context in aspects)
-    implementation(libs.spring.boot.starter.web)
+            // Web support (for servlet context in aspects)
+            libs.spring.boot.starter.web,
 
-    // Spring Context (core dependency processing)
-    implementation(libs.spring.context)
+            // Spring Context (core dependency processing)
+            libs.spring.context,
 
-    implementation(libs.jackson.core)
+            // JSON processing (for request/response serialization)
+            libs.jackson.core
+    )
 
-    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(
+            libs.spring.boot.starter.test,
+            libs.spock.core,
+            libs.spock.spring
+    )
+
+    testRuntimeOnly(
+            libs.junit.platform.launcher
+    )
 }
 
 java {

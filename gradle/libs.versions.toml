@@ -4,6 +4,7 @@ spring-boot = "4.0.6"
 spring-dependency-management = "1.1.7"
 jackson = "3.1.2"
 junit = "5"
+spock = "2.4-M7-groovy-5.0"
 
 [libraries]
 # Spring Boot Starters
@@ -18,8 +19,10 @@ spring-context = { group = "org.springframework", name = "spring-context" }
 # Jackson
 jackson-core = { group = "tools.jackson.core", name = "jackson-core", version.ref = "jackson"}
 
-# JUnit
+# Testing
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher" }
+spock-core = { group = "org.spockframework", name = "spock-core", version.ref = "spock" }
+spock-spring = { group = "org.spockframework", name = "spock-spring", version.ref = "spock" }
 
 # Spring Boot BOM
 spring-boot-bom = { group = "org.springframework.boot", name = "spring-boot-dependencies", version.ref = "spring-boot" }
